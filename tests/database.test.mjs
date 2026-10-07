@@ -107,6 +107,7 @@ assert.equal(noOracle.secret,null);assert.equal(noOracle.progress.prefix,'C');as
 for(let i=0;i<5;i++)assert.equal((await db.query('select public.nexo_allow_request($1,$2) as allowed',[b,'register'])).rows[0].allowed,true);
 assert.equal((await db.query('select public.nexo_allow_request($1,$2) as allowed',[b,'register'])).rows[0].allowed,false);
 assert.equal((await db.query('select public.nexo_allow_request($1,$2) as allowed',[c,'register'])).rows[0].allowed,true);
+for(const [scope,maximum] of [['answer',10],['report',3]]){for(let i=0;i<maximum;i++)assert.equal((await db.query('select public.nexo_allow_request($1,$2) as allowed',[b,scope])).rows[0].allowed,true);assert.equal((await db.query('select public.nexo_allow_request($1,$2) as allowed',[b,scope])).rows[0].allowed,false);}
 await db.exec('reset role');
 await db.query("select set_config('request.jwt.claim.sub',$1,false)",[b]);
 await db.exec('set role authenticated');

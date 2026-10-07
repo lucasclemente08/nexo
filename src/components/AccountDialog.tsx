@@ -1,7 +1,8 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { CloudCheck, KeyRound, LogOut } from 'lucide-react';
-import { createAccount, loginAccount, supabase } from '../lib/nexo';
+import { createAccount, loginAccount, requestNexo, supabase } from '../lib/nexo';
+import { RegistrationCaptcha } from './RegistrationCaptcha';
 import { Dialog } from './Dialog';
 
 export function AccountDialog({user,onClose}:{user:User|null;onClose:()=>void}) {
@@ -11,14 +12,25 @@ export function AccountDialog({user,onClose}:{user:User|null;onClose:()=>void}) 
   const [confirmation,setConfirmation]=useState('');
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
+  const [captchaConfig,setCaptchaConfig]=useState<{required:boolean;siteKey:string}|null>(null);
+  const [captchaToken,setCaptchaToken]=useState('');
+  const [captchaAttempt,setCaptchaAttempt]=useState(0);
+  const [configAttempt,setConfigAttempt]=useState(0);
+  const [configError,setConfigError]=useState('');
+  useEffect(()=>{
+    let active=true;setCaptchaConfig(null);setConfigError('');
+    void requestNexo<{required:boolean;siteKey:string}>('registration-config').then(config=>{if(active)setCaptchaConfig(config);}).catch(()=>{if(active)setConfigError('No pudimos cargar la verificación. Podés reintentar o seguir como invitado.');});
+    return ()=>{active=false;};
+  },[configAttempt]);
   const saved=!!user && !user.is_anonymous;
   async function submit(event:FormEvent){
     event.preventDefault();if(busy)return;setError('');
     if(mode==='create' && password!==confirmation){setError('Las contraseñas no coinciden.');return;}
+    if(mode==='create' && (!captchaConfig || (captchaConfig.required && !captchaToken))){setError('Completá la verificación de seguridad.');return;}
     setBusy(true);
-    try {if(mode==='create')await createAccount(username,password);else await loginAccount(username,password);setPassword('');setConfirmation('');onClose();}
+    try {if(mode==='create')await createAccount(username,password,captchaToken);else await loginAccount(username,password);setPassword('');setConfirmation('');onClose();}
     catch(err){setError(err instanceof Error?err.message:'No pudimos conectar.');}
-    finally {setBusy(false);}
+    finally {setBusy(false);if(mode==='create'){setCaptchaToken('');setCaptchaAttempt(value=>value+1);}}
   }
   const input='account-input';
   return <Dialog title={saved?'Tu partida está guardada':'Llevá tu ConTacto con vos'} onClose={onClose} busy={busy}>
@@ -30,7 +42,8 @@ export function AccountDialog({user,onClose}:{user:User|null;onClose:()=>void}) 
         <div><label htmlFor="account-password" className="block text-sm font-semibold mb-2">Contraseña</label><input id="account-password" className={input} type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete={mode==='create'?'new-password':'current-password'} minLength={mode==='create'?10:undefined} maxLength={128} required disabled={busy}/>{mode==='create' && <p className="text-xs text-[#736F66] mt-2">Al menos 10 caracteres. Guardala para volver a entrar.</p>}</div>
         {mode==='create' && <div><label htmlFor="account-confirmation" className="block text-sm font-semibold mb-2">Repetí la contraseña</label><input id="account-confirmation" className={input} type="password" value={confirmation} onChange={e=>setConfirmation(e.target.value)} autoComplete="new-password" minLength={10} maxLength={128} required disabled={busy}/></div>}
         {mode==='login' && <p className="text-xs text-[#736F66] rounded-lg bg-[#F4F0E8] p-3">Abrirás la partida guardada de esa cuenta. La partida de invitado de este dispositivo no se combina con ella.</p>}
-        <button className="account-primary flex justify-center gap-2 items-center" disabled={busy}><KeyRound size={16}/>{busy?'Conectando…':mode==='create'?'Crear cuenta y guardar partida':'Entrar y recuperar mi partida'}</button>
+        {mode==='create' && <div>{configError?<p role="alert" className="text-sm text-red-700">{configError}<button type="button" className="underline block py-3" onClick={()=>setConfigAttempt(value=>value+1)}>Reintentar verificación</button></p>:!captchaConfig?<p role="status" className="text-sm text-[#736F66]">Cargando verificación de seguridad…</p>:captchaConfig.required?<RegistrationCaptcha key={captchaAttempt} siteKey={captchaConfig.siteKey} onToken={setCaptchaToken}/>:null}</div>}
+        <button className="account-primary flex justify-center gap-2 items-center" disabled={busy || (mode==='create' && (!captchaConfig || (captchaConfig.required && !captchaToken)))}><KeyRound size={16}/>{busy?'Conectando…':mode==='create'?'Crear cuenta y guardar partida':'Entrar y recuperar mi partida'}</button>
       </form>
       <p className="text-xs text-[#736F66] mt-4">No pedimos tu correo. Por ahora no hay recuperación de contraseña: guardá tus datos de acceso.</p>
       <button type="button" className="block mx-auto text-sm underline mt-4" disabled={busy} onClick={onClose}>Seguir jugando sin cuenta</button>
