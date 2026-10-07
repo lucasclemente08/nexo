@@ -90,6 +90,12 @@ state=await call(a,'guess',{guess:'CAMINO'});assert.equal(state.progress.status,
 await assert.rejects(()=>call(a,'guess',{guess:'CAMINO'}),/terminó/);
 for(let i=0;i<3;i++) state=await call(players[7],'guess',{guess:'COSA'});
 assert.equal(state.progress.status,'LOST');
+assert.equal(state.secret,null);
+assert.equal((await call(players[7])).secret,null);
+assert(!JSON.stringify(state).includes('CAMINO'));
+const legacyRequest=randomUUID();
+await db.query('insert into nexo_private.requests(player_id,request_id,response) values($1,$2,$3)',[players[7],legacyRequest,{...state,secret:'CAMINO'}]);
+assert.equal((await call(players[7],'guess',{guess:'COSA',requestId:legacyRequest})).secret,null);
 await call(players[3],'guess',{guess:'CAMINO'});
 assert.equal((await call(players[3],'rate',{contactId:id,version:1,score:1})).progress.status,'WON');
 assert.equal((await call(a)).ownContacts.find(x=>x.id===id).status,'CONFIRMED');
