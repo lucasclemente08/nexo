@@ -21,7 +21,7 @@ export function AccountDialog({user,onClose}:{user:User|null;onClose:()=>void}) 
     finally {setBusy(false);}
   }
   const input='account-input';
-  return <Dialog title={saved?'Tu partida está guardada':'Llevá tu NEXO con vos'} onClose={onClose} busy={busy}>
+  return <Dialog title={saved?'Tu partida está guardada':'Llevá tu ConTacto con vos'} onClose={onClose} busy={busy}>
     {saved ? <><div className="rounded-xl bg-[#edf3eb] p-4 mb-5"><CloudCheck size={24} className="text-[#487047] mb-2"/><p className="font-semibold">{String(user.app_metadata.nexo_username || 'Tu cuenta')}</p><p className="text-sm text-[#736F66] mt-2">Tus pistas, créditos y letras se guardan automáticamente. Entrá con este usuario desde otro dispositivo para continuar.</p></div><button className="account-secondary flex justify-center gap-2" disabled={busy} onClick={async()=>{setBusy(true);const {error}=await supabase!.auth.signOut({scope:'local'});if(error){setError('No pudimos cerrar la sesión.');setBusy(false);}else onClose();}}><LogOut size={16}/>Cerrar sesión en este dispositivo</button></> : <>
       <p className="text-sm text-[#736F66] leading-relaxed mb-5">Podés seguir jugando sin cuenta. Si creás una, conservás tu partida y podés continuar desde el celular o la computadora.</p>
       <div className="grid grid-cols-2 rounded-xl bg-[#F4F0E8] p-1 mb-5">{([['create','Guardar mi partida'],['login','Ya tengo cuenta']] as const).map(([value,label])=><button key={value} type="button" disabled={busy} aria-pressed={mode===value} className={`py-2.5 rounded-lg text-sm font-semibold ${mode===value?'bg-white shadow-sm':''}`} onClick={()=>{setMode(value);setError('');setPassword('');setConfirmation('');}}>{label}</button>)}</div>
