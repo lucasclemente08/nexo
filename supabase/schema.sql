@@ -115,7 +115,8 @@ declare
   pool jsonb;
 begin
   if current_user <> 'service_role' then raise exception 'Acceso denegado.'; end if;
-  if p_player is null or not exists(select 1 from auth.users where id=p_player) then
+  -- Auth is verified by the Edge Function; the progress FK enforces user existence.
+  if p_player is null then
     raise exception 'Sesión inválida.';
   end if;
   -- One short transaction lock avoids cross-player deadlocks when crediting a creator.

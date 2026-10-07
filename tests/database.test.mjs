@@ -10,7 +10,6 @@ create schema auth;
 create table auth.users(id uuid primary key);
 create function auth.uid() returns uuid language sql as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
 grant usage on schema public,auth to anon,authenticated,service_role;
-grant select on auth.users to service_role;
 grant execute on function auth.uid() to authenticated;
 `);
 const schema=(await readFile(new URL('../supabase/schema.sql',import.meta.url),'utf8')).replace('alter publication supabase_realtime add table public.player_progress;','');

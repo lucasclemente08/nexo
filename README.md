@@ -2,6 +2,8 @@
 
 Juego diario de palabras en español, con contactos creados y resueltos por la comunidad. React + Vite en Vercel; Auth, PostgreSQL, Edge Functions y Realtime en Supabase.
 
+Proyecto de producción: `esmqacuaumebcpyvpdbs` (São Paulo). API: `https://esmqacuaumebcpyvpdbs.supabase.co`. Las variables públicas están configuradas en el proyecto Vercel `lucasclemente08s-projects/nexo`.
+
 ## Desarrollo
 
 ```sh
@@ -59,5 +61,7 @@ Las sesiones anónimas identifican sesiones, no prueban que dos cuentas pertenez
 ## Validación
 
 `npm test` ejecuta el esquema en PostgreSQL local mediante PGlite y comprueba secretos ocultos, prefijos, créditos, deduplicación, validaciones independientes, edición de pistas, reportes, límites de intentos y RLS. La publicación Realtime y el login anónimo requieren verificación adicional contra el proyecto Supabase real.
+
+El 7 de octubre de 2026 se verificó además la API desplegada con tres sesiones anónimas temporales: creación de pista, dos coincidencias independientes, revelación de letra, rechazo de respuesta duplicada, créditos y lectura únicamente del progreso propio. Las sesiones y contactos de prueba se eliminaron al terminar.
 
 La antigua lógica de LocalStorage y los desafíos con respuestas incluidas en el cliente se eliminaron. Las partidas de la versión anterior no se migran al modo comunitario.
