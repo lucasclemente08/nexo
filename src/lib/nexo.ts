@@ -33,7 +33,12 @@ export async function requestNexo<T>(action:string,data:Record<string,unknown>={
   await ensureSession();
   const {data:{session}}=await supabase.auth.getSession();
   if(!session) throw new Error('La sesión venció. Volvé a abrir el juego.');
-  const response=await fetch(`${url}/functions/v1/nexo`,{method:'POST',headers:{'Content-Type':'application/json',apikey:key,Authorization:`Bearer ${session.access_token}`},body:JSON.stringify({action,data:action==='state'?data:{...data,requestId:data.requestId || crypto.randomUUID()}})});
+  let response:Response;
+  try {
+    response=await fetch(`${url}/functions/v1/nexo`,{method:'POST',signal:AbortSignal.timeout(15000),headers:{'Content-Type':'application/json',apikey:key,Authorization:`Bearer ${session.access_token}`},body:JSON.stringify({action,data:action==='state'?data:{...data,requestId:data.requestId || crypto.randomUUID()}})});
+  } catch {
+    throw new Error('La conexión tardó demasiado o se interrumpió. Actualizá la partida antes de repetir la acción.');
+  }
   const result=await response.json();
   if(!response.ok) throw new Error(result.error || 'No pudimos conectar con ConTacto.');
   return result;
