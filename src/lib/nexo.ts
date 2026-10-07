@@ -3,12 +3,12 @@ const url=import.meta.env.VITE_SUPABASE_URL;
 const key=import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 export const supabase=url && key ? createClient(url,key) : null;
 export interface CommunityContact {id:string;prefix:string;clue:string;version:number}
-export interface OwnContact {id:string;prefix:string;word:string;clue:string;status:'PENDING'|'CONFIRMED'|'SUSPENDED';required:number;matches:number;responses:number;originality:number}
+export interface OwnContact {id:string;prefix:string;word:string;clue:string;status:'PENDING'|'CONFIRMED'|'SUSPENDED';required:number;matches:number;responses:number;originality:number;ratingCount:number;ratingAverage:number|null}
 export interface DailyState {
   day:string;
   progress:{day:string;prefix:string;status:'PLAYING'|'WON'|'LOST';credits:number;attempts:string[];contacts:number;started_at:string;finished_at:string|null};
   config:{confirmations:number;maxAttempts:number;publishCost:number;answerReward:number};
-  ownContacts:OwnContact[];pool:CommunityContact[];secret:string|null;message?:string;correct?:boolean;
+  ratingQueue:CommunityContact[];ownContacts:OwnContact[];pool:CommunityContact[];secret:string|null;message?:string;correct?:boolean;
 }
 let sessionPromise:Promise<string>|null=null;
 export function ensureSession():Promise<string> {
