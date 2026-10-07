@@ -28,17 +28,41 @@ Deno.serve(async (req: Request) => {
     for(const chunk of chunks){buffer.set(chunk,offset);offset+=chunk.byteLength;}
     const body=JSON.parse(new TextDecoder().decode(buffer));
     if(!body || typeof body!=='object' || Array.isArray(body) || typeof body.action!=='string' || (body.data!==undefined && (!body.data || typeof body.data!=='object' || Array.isArray(body.data)))) return reply({error:'Solicitud inválida.'},400);
-    if(!['state','register','create','answer','edit','report','rate','bonus','guess'].includes(body.action)) return reply({error:'Operación inválida.'},400);
-    const scope=body.action==='state'?'state':body.action==='register'?'register':'play';
+    if(!['state','registration-config','register','create','answer','edit','report','rate','bonus','guess'].includes(body.action)) return reply({error:'Operación inválida.'},400);
+    const scope=['state','registration-config'].includes(body.action)?'state':body.action==='register'?'register':'play';
     const {data:allowed,error:limitError}=await admin.rpc('nexo_allow_request',{p_player:user.id,p_scope:scope});
     if(limitError) return reply({error:'No pudimos verificar la solicitud. Intentá nuevamente.'},503);
     if(!allowed) return reply({error:'Demasiados intentos. Esperá un minuto antes de continuar.'},429);
+    if(['answer','report'].includes(body.action)) {
+      const {data:actionAllowed,error:actionError}=await admin.rpc('nexo_allow_request',{p_player:user.id,p_scope:body.action});
+      if(actionError)return reply({error:'No pudimos verificar la solicitud. Intentá nuevamente.'},503);
+      if(!actionAllowed)return reply({error:body.action==='report'?'Llegaste al límite de 3 reportes por minuto. Esperá para enviar otro.':'Llegaste al límite de 10 respuestas por minuto. Esperá para continuar.'},429);
+    }
+    const captchaSecret=Deno.env.get('TURNSTILE_SECRET_KEY') || '';
+    const captchaSiteKey=Deno.env.get('TURNSTILE_SITE_KEY') || '';
+    if(body.action==='registration-config') {
+      if(Boolean(captchaSecret)!==Boolean(captchaSiteKey))return reply({error:'La verificación de cuentas se está configurando. Podés seguir jugando como invitado.'},503);
+      return reply({required:!!captchaSecret,siteKey:captchaSiteKey});
+    }
     if(body.action==='register') {
       if(!user.is_anonymous) return reply({error:'Esta sesión ya tiene una cuenta.'},400);
       const username=typeof body.data?.username==='string'?body.data.username.trim().toLowerCase():'';
       const password=body.data?.password;
       if(!/^[a-z0-9_]{3,24}$/.test(username)) return reply({error:'Usá entre 3 y 24 letras sin tildes, números o guion bajo.'},400);
       if(typeof password!=='string' || password.length<10 || password.length>128) return reply({error:'La contraseña debe tener entre 10 y 128 caracteres.'},400);
+      if(captchaSecret || captchaSiteKey) {
+        if(!captchaSecret || !captchaSiteKey)return reply({error:'La creación de cuentas está temporalmente en configuración. Podés seguir jugando como invitado.'},503);
+        const captchaToken=body.data?.captchaToken;
+        if(typeof captchaToken!=='string' || !captchaToken || captchaToken.length>2048)return reply({error:'Completá la verificación de seguridad antes de crear tu cuenta.'},400);
+        let verification;
+        try {
+          const verified=await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify',{method:'POST',headers:{'Content-Type':'application/json'},signal:AbortSignal.timeout(8000),body:JSON.stringify({secret:captchaSecret,response:captchaToken})});
+          if(!verified.ok)throw new Error('Provider unavailable');
+          verification=await verified.json();
+        } catch {return reply({error:'No pudimos verificar el CAPTCHA. Reintentá; podés seguir jugando sin cuenta.'},503);}
+        const allowedHosts=new Set([...origins].map(url=>new URL(url).hostname).filter(host=>host!=='localhost'));
+        if(verification.success!==true || verification.action!=='register' || !allowedHosts.has(verification.hostname))return reply({error:'La verificación venció o no es válida. Completala nuevamente.'},400);
+      }
       // This is a username identity, not a real email. Never send mail to this reserved domain.
       // Updating the existing UUID preserves every contact and all progress under RLS.
       const {data,error}=await admin.auth.admin.updateUserById(user.id,{

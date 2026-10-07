@@ -45,8 +45,8 @@ export async function requestNexo<T>(action:string,data:Record<string,unknown>={
   return result;
 }
 
-export async function createAccount(username:string,password:string) {
-  await requestNexo('register',{username,password});
+export async function createAccount(username:string,password:string,captchaToken?:string) {
+  await requestNexo('register',{username,password,captchaToken});
   const {error}=await supabase!.auth.signInWithPassword({email:`${username.trim().toLowerCase()}@players.nexo.invalid`,password});
   if(error) throw new Error('La cuenta se creó. Iniciá sesión con tu usuario y contraseña.');
 }

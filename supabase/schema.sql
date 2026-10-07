@@ -302,7 +302,7 @@ grant execute on function nexo_private.normalize_word(text) to service_role;
 -- Separate RPC transaction: failed game operations cannot roll back this limit.
 create table nexo_private.api_limits (
   player_id uuid not null references auth.users(id) on delete cascade,
-  scope text not null check (scope in ('state','register','play')),
+  scope text not null check (scope in ('state','register','play','answer','report')),
   window_start timestamptz not null,
   hits integer not null check (hits > 0),
   primary key (player_id,scope)
@@ -318,7 +318,7 @@ declare
   maximum integer;
 begin
   if current_user <> 'service_role' then raise exception 'Acceso denegado.'; end if;
-  maximum := case p_scope when 'state' then 60 when 'register' then 5 when 'play' then 30 else 0 end;
+  maximum := case p_scope when 'state' then 60 when 'register' then 5 when 'play' then 30 when 'answer' then 10 when 'report' then 3 else 0 end;
   if maximum=0 or p_player is null then return false; end if;
   insert into nexo_private.api_limits(player_id,scope,window_start,hits)
   values(p_player,p_scope,minute_start,1)
