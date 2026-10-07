@@ -1,112 +1,4 @@
--- NEXO: private answers, service-only transactional API, own-progress Realtime.
-create schema if not exists nexo_private;
-revoke all on schema nexo_private from public, anon, authenticated;
-grant usage on schema nexo_private to service_role;
-
-create table nexo_private.settings (
-  id boolean primary key default true check (id),
-  confirmations integer not null default 2 check (confirmations between 1 and 10),
-  max_attempts integer not null default 3 check (max_attempts between 1 and 20),
-  initial_credits integer not null default 1 check (initial_credits >= 1),
-  publish_cost integer not null default 1 check (publish_cost > 0),
-  answer_reward integer not null default 1 check (answer_reward > 0),
-  report_threshold integer not null default 3 check (report_threshold > 0)
-);
-insert into nexo_private.settings (id) values (true);
-create table nexo_private.words (id bigint generated always as identity primary key, word text unique not null);
-insert into nexo_private.words(word) values
-('PUENTE'),('SOMBRA'),('VENTANA'),('CAMINO'),('BOSQUE'),('SEMILLA'),('HORIZONTE'),
-('BRISA'),('DESTINO'),('REFUGIO'),('ESTRELLA'),('SILENCIO'),('CUADERNO'),('JARDIN'),
-('ABRAZO'),('RELOJ'),('CASCADA'),('LINTERNA'),('TESORO'),('MARIPOSA'),('NUBE'),
-('ORILLA'),('ESPEJO'),('RINCON'),('CAMPANA'),('ARENA'),('PALABRA'),('MEMORIA'),
-('ISLA'),('INVIERNO'),('ALMENDRA'),('CARACOL');
-create table nexo_private.days (day date primary key, secret text not null);
-create table public.player_progress (
-  player_id uuid not null references auth.users(id) on delete cascade,
-  day date not null,
-  prefix text not null,
-  status text not null default 'PLAYING' check (status in ('PLAYING','WON','LOST')),
-  credits integer not null check (credits >= 0),
-  attempts text[] not null default '{}',
-  contacts integer not null default 0,
-  bonus_used boolean not null default false,
-  started_at timestamptz not null default now(),
-  finished_at timestamptz,
-  primary key(player_id,day)
-);
-alter table public.player_progress enable row level security;
-revoke all on public.player_progress from anon, authenticated;
-grant select on public.player_progress to authenticated;
-create policy own_progress on public.player_progress for select to authenticated
-using ((select auth.uid()) = player_id);
-alter publication supabase_realtime add table public.player_progress;
-
-create table nexo_private.contacts (
-  id uuid primary key default gen_random_uuid(),
-  day date not null references nexo_private.days(day),
-  creator uuid not null references auth.users(id) on delete cascade,
-  prefix text not null,
-  word text not null,
-  clue text not null check (length(clue) between 8 and 300),
-  version integer not null default 1,
-  required integer not null,
-  status text not null default 'PENDING' check (status in ('PENDING','CONFIRMED','SUSPENDED')),
-  awarded boolean not null default false,
-  created_at timestamptz not null default now()
-);
-create index contact_pool on nexo_private.contacts(day,prefix,status);
-create index contact_owner on nexo_private.contacts(creator,day);
-create table nexo_private.answers (
-  contact_id uuid not null references nexo_private.contacts(id) on delete cascade,
-  player_id uuid not null references auth.users(id) on delete cascade,
-  version integer not null,
-  guess text not null,
-  correct boolean not null,
-  created_at timestamptz not null default now(),
-  primary key(contact_id,player_id)
-);
-create table nexo_private.reports (
-  contact_id uuid not null references nexo_private.contacts(id) on delete cascade,
-  player_id uuid not null references auth.users(id) on delete cascade,
-  reason text not null check (reason in ('fragment','spelling','translation','inappropriate','other')),
-  primary key(contact_id,player_id)
-);
-create table nexo_private.ratings (
-  contact_id uuid not null references nexo_private.contacts(id) on delete cascade,
-  player_id uuid not null references auth.users(id) on delete cascade,
-  version integer not null,
-  score integer not null check (score between 1 and 5),
-  created_at timestamptz not null default now(),
-  primary key(contact_id,player_id,version)
-);
-create index rating_player on nexo_private.ratings(player_id);
-alter table nexo_private.ratings enable row level security;
-revoke all on nexo_private.ratings from public,anon,authenticated;
-grant all on nexo_private.ratings to service_role;
-create table nexo_private.requests (
-  player_id uuid not null references auth.users(id) on delete cascade,
-  request_id uuid not null,
-  response jsonb not null,
-  created_at timestamptz not null default now(),
-  primary key(player_id,request_id)
-);
-create index request_rate on nexo_private.requests(player_id,created_at);
-alter table nexo_private.settings enable row level security;
-alter table nexo_private.words enable row level security;
-alter table nexo_private.days enable row level security;
-alter table nexo_private.contacts enable row level security;
-alter table nexo_private.answers enable row level security;
-alter table nexo_private.reports enable row level security;
-alter table nexo_private.requests enable row level security;
-grant all on all tables in schema nexo_private to service_role;
-grant all on all sequences in schema nexo_private to service_role;
-grant all on public.player_progress to service_role;
-
-create function nexo_private.normalize_word(value text) returns text
-language sql immutable strict set search_path = '' as $$
-  select translate(upper(normalize(trim(value), NFC)), 'ÁÉÍÓÚÜ', 'AEIOUU')
-$$;
-
+alter table public.player_progress add column bonus_used boolean not null default false;
 -- Deterministic quality check: no AI and no browser-provided eligibility.
 create function nexo_private.good_clue(p_contact uuid) returns boolean
 language sql stable security invoker set search_path = '' as $$
@@ -122,9 +14,7 @@ $$;
 revoke all on function nexo_private.good_clue(uuid) from public,anon,authenticated;
 grant execute on function nexo_private.good_clue(uuid) to service_role;
 
--- Locks serialize each player's balance and each contact's confirmations.
--- Execute is revoked from all browser roles; only the authenticated Edge API calls this.
-create function public.nexo_api(p_player uuid, p_action text, p_data jsonb default '{}')
+create or replace function public.nexo_api(p_player uuid, p_action text, p_data jsonb default '{}')
 returns jsonb language plpgsql security invoker set search_path = '' as $$
 declare
   d date := (now() at time zone 'America/Argentina/Buenos_Aires')::date;
@@ -220,7 +110,7 @@ begin
         update public.player_progress set prefix=left(secret_word,length(prefix)+1),contacts=contacts+1,
           status=case when length(prefix)+1>=length(secret_word) then 'WON' else 'PLAYING' end,
           finished_at=case when length(prefix)+1>=length(secret_word) then now() else null end
-        where player_id=c.creator and day=d and status='PLAYING' and starts_with(prefix,c.prefix);
+        where player_id=c.creator and day=d and status='PLAYING' and prefix=c.prefix;
       end if;
       result:=jsonb_build_object('correct',word_input=c.word,'message',case when word_input=c.word then '¡CONTACTO! Sumaste un crédito por ayudar.' else 'No hubo contacto. Sumaste un crédito por participar.' end);
     elsif p_action='rate' then
@@ -296,38 +186,3 @@ end;
 $$;
 revoke all on function public.nexo_api(uuid,text,jsonb) from public,anon,authenticated;
 grant execute on function public.nexo_api(uuid,text,jsonb) to service_role;
-revoke all on function nexo_private.normalize_word(text) from public,anon,authenticated;
-grant execute on function nexo_private.normalize_word(text) to service_role;
-
--- Separate RPC transaction: failed game operations cannot roll back this limit.
-create table nexo_private.api_limits (
-  player_id uuid not null references auth.users(id) on delete cascade,
-  scope text not null check (scope in ('state','register','play')),
-  window_start timestamptz not null,
-  hits integer not null check (hits > 0),
-  primary key (player_id,scope)
-);
-alter table nexo_private.api_limits enable row level security;
-revoke all on nexo_private.api_limits from public,anon,authenticated;
-grant all on nexo_private.api_limits to service_role;
-create function public.nexo_allow_request(p_player uuid,p_scope text)
-returns boolean language plpgsql security invoker set search_path = '' as $$
-declare
-  minute_start timestamptz := date_trunc('minute',now());
-  request_count integer;
-  maximum integer;
-begin
-  if current_user <> 'service_role' then raise exception 'Acceso denegado.'; end if;
-  maximum := case p_scope when 'state' then 60 when 'register' then 5 when 'play' then 30 else 0 end;
-  if maximum=0 or p_player is null then return false; end if;
-  insert into nexo_private.api_limits(player_id,scope,window_start,hits)
-  values(p_player,p_scope,minute_start,1)
-  on conflict(player_id,scope) do update set
-    hits=case when api_limits.window_start=minute_start then least(api_limits.hits+1,maximum+1) else 1 end,
-    window_start=minute_start
-  returning hits into request_count;
-  return request_count <= maximum;
-end;
-$$;
-revoke all on function public.nexo_allow_request(uuid,text) from public,anon,authenticated;
-grant execute on function public.nexo_allow_request(uuid,text) to service_role;
