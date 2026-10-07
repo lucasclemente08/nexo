@@ -26,6 +26,9 @@ export function ensureSession():Promise<string> {
   return sessionPromise;
 }
 export async function callNexo(action:string,data:Record<string,unknown>={}):Promise<DailyState> {
+  return requestNexo<DailyState>(action,data);
+}
+export async function requestNexo<T>(action:string,data:Record<string,unknown>={}):Promise<T> {
   if(!supabase) throw new Error('Falta configurar la conexión con Supabase.');
   await ensureSession();
   const {data:{session}}=await supabase.auth.getSession();
@@ -35,3 +38,16 @@ export async function callNexo(action:string,data:Record<string,unknown>={}):Pro
   if(!response.ok) throw new Error(result.error || 'No pudimos conectar con NEXO.');
   return result;
 }
+
+export async function createAccount(username:string,password:string) {
+  await requestNexo('register',{username,password});
+  const {error}=await supabase!.auth.signInWithPassword({email:`${username.trim().toLowerCase()}@players.nexo.invalid`,password});
+  if(error) throw new Error('La cuenta se creó. Iniciá sesión con tu usuario y contraseña.');
+}
+export async function loginAccount(username:string,password:string) {
+  const handle=username.trim().toLowerCase();
+  if(!/^[a-z0-9_]{3,24}$/.test(handle)) throw new Error('Revisá el nombre de usuario.');
+  const {error}=await supabase!.auth.signInWithPassword({email:`${handle}@players.nexo.invalid`,password});
+  if(error) throw new Error(error.status===429?'Demasiados intentos. Esperá unos minutos.':'El usuario o la contraseña no son correctos.');
+}
+

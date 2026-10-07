@@ -17,6 +17,22 @@ Deno.serve(async (req: Request) => {
     const raw=await req.text();
     if(raw.length>4096) return reply({error:'Solicitud demasiado grande.'},413);
     const body=JSON.parse(raw);
+    if(body.action==='register') {
+      if(!user.is_anonymous) return reply({error:'Esta sesión ya tiene una cuenta.'},400);
+      const username=typeof body.data?.username==='string'?body.data.username.trim().toLowerCase():'';
+      const password=body.data?.password;
+      if(!/^[a-z0-9_]{3,24}$/.test(username)) return reply({error:'Usá entre 3 y 24 letras sin tildes, números o guion bajo.'},400);
+      if(typeof password!=='string' || password.length<10 || password.length>128) return reply({error:'La contraseña debe tener entre 10 y 128 caracteres.'},400);
+      // This is a username identity, not a real email. Never send mail to this reserved domain.
+      // Updating the existing UUID preserves every contact and all progress under RLS.
+      const {data,error}=await admin.auth.admin.updateUserById(user.id,{
+        email:`${username}@players.nexo.invalid`,password,email_confirm:true,
+        app_metadata:{...user.app_metadata,nexo_username:username},
+      });
+      if(error) return reply({error:error.code==='email_exists'?'Ese usuario ya está en uso. Elegí otro o iniciá sesión.':'No pudimos crear la cuenta. Probá otro usuario o una contraseña más segura.'},400);
+      if(data.user?.is_anonymous) return reply({error:'No pudimos vincular la cuenta. Intentá nuevamente.'},500);
+      return reply({username,message:'Tu cuenta está lista. Conservaste toda tu partida.'});
+    }
     if(!['state','create','answer','edit','report','guess'].includes(body.action)) return reply({error:'Operación inválida.'},400);
     const {data,error}=await admin.rpc('nexo_api',{p_player:user.id,p_action:body.action,p_data:body.data || {}});
     if(error) return reply({error:error.code==='P0001'?error.message:'No pudimos procesar la operación. Actualizá e intentá de nuevo.'},400);

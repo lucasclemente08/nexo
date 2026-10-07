@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "node tests/database.test.mjs"
+    "test": "node tests/database.test.mjs && node tests/celebration.test.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8",
