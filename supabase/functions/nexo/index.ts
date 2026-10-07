@@ -1,5 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.117.2';
-const origins = new Set(['https://nexo-eight-alpha.vercel.app','https://nexo-lucasclemente08s-projects.vercel.app','http://localhost:5173']);
+const origins = new Set(['https://nexo-eight-alpha.vercel.app','https://contacto.sytes.net','https://www.contacto.sytes.net','https://nexo-lucasclemente08s-projects.vercel.app','http://localhost:5173']);
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {auth:{persistSession:false,autoRefreshToken:false}});
 Deno.serve(async (req: Request) => {
   const origin=req.headers.get('origin') || '';
