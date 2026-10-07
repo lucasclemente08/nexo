@@ -8,15 +8,31 @@ Deno.serve(async (req: Request) => {
   if(req.method==='OPTIONS') return new Response(null,{headers});
   if(req.method!=='POST') return reply({error:'Método no permitido.'},405);
   if(origin && !origins.has(origin)) return reply({error:'Origen no permitido.'},403);
+  if(Number(req.headers.get('content-length'))>4096) return reply({error:'Solicitud demasiado grande.'},413);
   const token=req.headers.get('Authorization')?.match(/^Bearer (.+)$/i)?.[1];
   if(!token) return reply({error:'Necesitás una sesión para jugar.'},401);
   // The player ID comes from verified Auth, never from the request body.
   const {data:{user},error:authError}=await admin.auth.getUser(token);
   if(authError || !user) return reply({error:'La sesión venció. Volvé a abrir el juego.'},401);
   try {
-    const raw=await req.text();
-    if(raw.length>4096) return reply({error:'Solicitud demasiado grande.'},413);
-    const body=JSON.parse(raw);
+    const reader=req.body?.getReader();
+    const chunks:Uint8Array[]=[];
+    let bytes=0;
+    if(reader)while(true){
+      const {done,value}=await reader.read();if(done)break;
+      bytes+=value.byteLength;
+      if(bytes>4096){await reader.cancel();return reply({error:'Solicitud demasiado grande.'},413);}
+      chunks.push(value);
+    }
+    const buffer=new Uint8Array(bytes);let offset=0;
+    for(const chunk of chunks){buffer.set(chunk,offset);offset+=chunk.byteLength;}
+    const body=JSON.parse(new TextDecoder().decode(buffer));
+    if(!body || typeof body!=='object' || Array.isArray(body) || typeof body.action!=='string' || (body.data!==undefined && (!body.data || typeof body.data!=='object' || Array.isArray(body.data)))) return reply({error:'Solicitud inválida.'},400);
+    if(!['state','register','create','answer','edit','report','guess'].includes(body.action)) return reply({error:'Operación inválida.'},400);
+    const scope=body.action==='state'?'state':body.action==='register'?'register':'play';
+    const {data:allowed,error:limitError}=await admin.rpc('nexo_allow_request',{p_player:user.id,p_scope:scope});
+    if(limitError) return reply({error:'No pudimos verificar la solicitud. Intentá nuevamente.'},503);
+    if(!allowed) return reply({error:'Demasiados intentos. Esperá un minuto antes de continuar.'},429);
     if(body.action==='register') {
       if(!user.is_anonymous) return reply({error:'Esta sesión ya tiene una cuenta.'},400);
       const username=typeof body.data?.username==='string'?body.data.username.trim().toLowerCase():'';

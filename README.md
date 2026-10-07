@@ -1,4 +1,4 @@
-# NEXO
+# ConTacto
 
 Juego diario de palabras en español, con contactos creados y resueltos por la comunidad. React + Vite en Vercel; Auth, PostgreSQL, Edge Functions y Realtime en Supabase.
 
@@ -56,7 +56,13 @@ Las palabras, contactos, respuestas y reportes viven en un esquema privado sin a
 
 Un bloqueo transaccional diario serializa operaciones para evitar doble cobro, doble revelación y bloqueos cruzados. Un identificador de operación permite deduplicar solicitudes. Hay un límite de 30 operaciones de escritura por usuario y minuto. Este enfoque es adecuado para el inicio del juego; conviene revisar contención antes de crecer a tráfico elevado.
 
-Las sesiones anónimas identifican sesiones, no prueban que dos cuentas pertenezcan a personas distintas. Borrar datos del navegador crea otra identidad. Antes de una difusión masiva, incorporar CAPTCHA/Turnstile y límites de creación de cuentas; para recuperar progreso entre dispositivos, ofrecer vinculación con una cuenta.
+Las sesiones anónimas identifican sesiones, no prueban que dos cuentas pertenezcan a personas distintas. Borrar datos del navegador crea otra identidad. Antes de una difusión masiva, incorporar CAPTCHA/Turnstile. La cuenta opcional con usuario y contraseña conserva el UUID invitado y permite recuperar pistas y progreso desde otro dispositivo; todavía no ofrece recuperación de contraseña.
+
+La función Edge verifica Auth y aplica límites persistentes por identidad, incluso para operaciones fallidas: 60 consultas, 30 acciones de juego y 5 intentos de registro por minuto. El contador usa una transacción separada para que un error del juego no lo revierta. Las solicitudes se limitan a 4096 bytes antes de interpretar el JSON. El navegador recibe CSP, protección contra incrustación, bloqueo de interpretación de tipos incorrectos y una política restringida de permisos.
+
+Publicar una palabra válida se comporta igual aunque coincida con la secreta: no se rechaza con un mensaje que permita consultar la solución sin gastar intentos. El juego sigue mostrando la solución cuando termina una partida; por eso no garantiza resistencia a jugadores que usen varias cuentas.
+
+Para actualizar un proyecto que ya tenía el esquema anterior, aplicar las migraciones de `supabase/migrations/` antes de desplegar la nueva función Edge. Una instalación nueva usa el esquema completo y no vuelve a aplicar esas migraciones iniciales.
 
 ## Validación
 

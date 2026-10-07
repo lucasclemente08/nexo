@@ -73,10 +73,10 @@ export function App() {
   },[refresh,user?.id]);
   async function act(action:string,data:Record<string,unknown>,after?:()=>void){
     if(mutating.current) return;
-    mutating.current=true;++sequence.current;setBusy(true);setError('');setNotice('');
-    try {const result=await callNexo(action,data);applyGame(result);setNotice(result.message || '');after?.();}
-    catch(err){setError(err instanceof Error?err.message:'No pudimos completar la operación.');}
-    finally {mutating.current=false;setBusy(false);}
+    mutating.current=true;const id=++sequence.current;setBusy(true);setError('');setNotice('');
+    try {const result=await callNexo(action,data);if(id===sequence.current){applyGame(result);setNotice(result.message || '');after?.();}}
+    catch(err){if(id===sequence.current)setError(err instanceof Error?err.message:'No pudimos completar la operación.');}
+    finally {mutating.current=false;setBusy(false);if(id!==sequence.current)void refresh();}
   }
   const contact=game?.pool[0];
   useEffect(()=>{setGuess('');},[contact?.id,contact?.version]);
@@ -107,14 +107,14 @@ export function App() {
       {playing && <>
         <div className="grid grid-cols-2 gap-2 mb-3" role="group" aria-label="Acciones del juego">{([['help','Ayudar a alguien'],['create','Crear mi contacto']] as const).map(([value,label])=><button key={value} aria-pressed={tab===value} onClick={()=>setTab(value)} className={`rounded-xl py-3 text-sm font-semibold ${tab===value?'bg-[#1A1A18] text-white':'bg-[#F4F0E8]'}`}>{label}</button>)}</div>
         <p className="action-explainer text-xs text-[#736F66] mb-3">{tab==='help'?`Ayudás a otra persona y ganás ${game.config.answerReward} ${game.config.answerReward===1?'crédito':'créditos'}. Tu prefijo avanza cuando aciertan tu pista.`:'Esta es tu pista: cuando la comunidad acierta tu palabra, descubrís otra letra.'}</p>
-        <section className="action-card bg-white border border-[#E8E2D5] rounded-2xl p-4 sm:p-5 mb-4">
+        <section key={tab} aria-busy={busy} className="action-card bg-white border border-[#E8E2D5] rounded-2xl p-4 sm:p-5 mb-4">
           {tab==='help' ? contact ? <>
             <div className="flex justify-between text-xs text-[#736F66]"><span>Empieza con {contact.prefix}...</span><button onClick={()=>{setContactId(contact.id);setModal('report');}} className="flex items-center gap-1"><Flag size={13}/>Reportar</button></div>
             <p className="community-clue font-editorial text-2xl leading-snug my-4 break-words">“{contact.clue}”</p>
-            <form onSubmit={e=>submit(e,'answer',{contactId:contact.id,version:contact.version,guess},()=>setGuess(''))} className="space-y-3"><label htmlFor="contact-guess" className="block text-sm">¿Qué palabra pensó?</label><input id="contact-guess" className={field} value={guess} onChange={e=>setGuess(e.target.value)} maxLength={40} autoComplete="off" required disabled={busy}/><button className={button} disabled={busy || !guess.trim()}>Enviar respuesta · +{game.config.answerReward} crédito</button></form><p className="text-xs text-[#736F66] mt-3">Una respuesta por pista. El contacto depende de coincidencias humanas.</p>
+            <form onSubmit={e=>submit(e,'answer',{contactId:contact.id,version:contact.version,guess},()=>setGuess(''))} className="space-y-3"><label htmlFor="contact-guess" className="block text-sm">¿Qué palabra pensó?</label><input id="contact-guess" className={field} value={guess} onChange={e=>setGuess(e.target.value)} maxLength={40} autoComplete="off" required disabled={busy}/><button className={button} disabled={busy || !guess.trim()}>{busy?'Enviando respuesta…':`Enviar respuesta · +${game.config.answerReward} crédito`}</button></form><p className="text-xs text-[#736F66] mt-3">Una respuesta por pista. El contacto depende de coincidencias humanas.</p>
           </> : <div className="text-center py-5"><Handshake className="mx-auto mb-3 text-[#918771]" size={32}/><h2 className="font-editorial text-2xl">La comunidad está pensando.</h2><p className="text-sm text-[#736F66] mt-3">Todavía no hay pistas compatibles. Podés publicar la tuya con tu crédito inicial o volver en un rato.</p><button className="underline text-sm mt-4" onClick={()=>setTab('create')}>Crear una pista</button></div> : <>
             <h2 className="font-editorial text-2xl mb-2">Pensá una palabra con {game.progress.prefix}...</h2><p className="text-sm text-[#736F66] mb-4">Tu palabra queda oculta. Cuando {game.config.confirmations} {game.config.confirmations===1?'persona la acierta':'personas la aciertan'}, descubrís otra letra del ConTacto.</p>
-            <form className="space-y-3" onSubmit={e=>submit(e,'create',{word,clue},()=>{setWord('');setClue('');})}><label htmlFor="private-word" className="block text-sm">Tu palabra privada</label><input id="private-word" className={field} value={word} onChange={e=>setWord(e.target.value)} maxLength={40} autoComplete="off" disabled={busy} required/><label htmlFor="clue" className="block text-sm">Una pista para que la descubran</label><textarea id="clue" className={field} rows={3} value={clue} onChange={e=>setClue(e.target.value)} minLength={8} maxLength={300} required disabled={busy}/><button className={button} disabled={busy || game.progress.credits<game.config.publishCost}>Publicar · {game.config.publishCost} crédito</button>{game.progress.credits<game.config.publishCost && <p className="text-xs text-[#736F66]">Respondé una pista de otro jugador para obtener un crédito.</p>}</form>
+            <form className="space-y-3" onSubmit={e=>submit(e,'create',{word,clue},()=>{setWord('');setClue('');})}><label htmlFor="private-word" className="block text-sm">Tu palabra privada</label><input id="private-word" className={field} value={word} onChange={e=>setWord(e.target.value)} maxLength={40} autoComplete="off" disabled={busy} required/><label htmlFor="clue" className="block text-sm">Una pista para que la descubran</label><textarea id="clue" className={field} rows={3} value={clue} onChange={e=>setClue(e.target.value)} minLength={8} maxLength={300} required disabled={busy}/><button className={button} disabled={busy || game.progress.credits<game.config.publishCost}>{busy?'Publicando pista…':`Publicar · ${game.config.publishCost} crédito`}</button>{game.progress.credits<game.config.publishCost && <p className="text-xs text-[#736F66]">Respondé una pista de otro jugador para obtener un crédito.</p>}</form>
           </>}
         </section>
       </>}
