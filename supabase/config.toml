@@ -1,0 +1,2 @@
+[functions.nexo]
+verify_jwt = true
