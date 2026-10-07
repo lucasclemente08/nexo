@@ -28,7 +28,7 @@ Deno.serve(async (req: Request) => {
     for(const chunk of chunks){buffer.set(chunk,offset);offset+=chunk.byteLength;}
     const body=JSON.parse(new TextDecoder().decode(buffer));
     if(!body || typeof body!=='object' || Array.isArray(body) || typeof body.action!=='string' || (body.data!==undefined && (!body.data || typeof body.data!=='object' || Array.isArray(body.data)))) return reply({error:'Solicitud inválida.'},400);
-    if(!['state','register','create','answer','edit','report','guess'].includes(body.action)) return reply({error:'Operación inválida.'},400);
+    if(!['state','register','create','answer','edit','report','rate','guess'].includes(body.action)) return reply({error:'Operación inválida.'},400);
     const scope=body.action==='state'?'state':body.action==='register'?'register':'play';
     const {data:allowed,error:limitError}=await admin.rpc('nexo_allow_request',{p_player:user.id,p_scope:scope});
     if(limitError) return reply({error:'No pudimos verificar la solicitud. Intentá nuevamente.'},503);
@@ -49,7 +49,7 @@ Deno.serve(async (req: Request) => {
       if(data.user?.is_anonymous) return reply({error:'No pudimos vincular la cuenta. Intentá nuevamente.'},500);
       return reply({username,message:'Tu cuenta está lista. Conservaste toda tu partida.'});
     }
-    if(!['state','create','answer','edit','report','guess'].includes(body.action)) return reply({error:'Operación inválida.'},400);
+    if(!['state','create','answer','edit','report','rate','guess'].includes(body.action)) return reply({error:'Operación inválida.'},400);
     const {data,error}=await admin.rpc('nexo_api',{p_player:user.id,p_action:body.action,p_data:body.data || {}});
     if(error) return reply({error:error.code==='P0001'?error.message:'No pudimos procesar la operación. Actualizá e intentá de nuevo.'},400);
     return reply(data);
