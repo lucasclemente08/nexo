@@ -35,7 +35,7 @@ export async function requestNexo<T>(action:string,data:Record<string,unknown>={
   if(!session) throw new Error('La sesión venció. Volvé a abrir el juego.');
   const response=await fetch(`${url}/functions/v1/nexo`,{method:'POST',headers:{'Content-Type':'application/json',apikey:key,Authorization:`Bearer ${session.access_token}`},body:JSON.stringify({action,data:action==='state'?data:{...data,requestId:data.requestId || crypto.randomUUID()}})});
   const result=await response.json();
-  if(!response.ok) throw new Error(result.error || 'No pudimos conectar con NEXO.');
+  if(!response.ok) throw new Error(result.error || 'No pudimos conectar con ConTacto.');
   return result;
 }
 
@@ -50,4 +50,3 @@ export async function loginAccount(username:string,password:string) {
   const {error}=await supabase!.auth.signInWithPassword({email:`${handle}@players.nexo.invalid`,password});
   if(error) throw new Error(error.status===429?'Demasiados intentos. Esperá unos minutos.':'El usuario o la contraseña no son correctos.');
 }
-
